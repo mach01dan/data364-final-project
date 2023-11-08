@@ -1,10 +1,5 @@
-# STEPS:
-## pip install streamlit fbprophet yfinance plotly pandas-ta ta
-
-#To run: streamlit run main.py
-
 import streamlit as st
-from datetime import date
+from datetime import date, time, datetime
 import yfinance as yf
 from prophet import Prophet
 import requests
@@ -32,6 +27,7 @@ macd_sell_threshold = 0  # Lower MACD values relative to the signal line suggest
 
 # Use a button to trigger data loading and analysis
 if st.button("Load Data and Analyze"):
+    # Load data
     @st.cache_data
     def load_data(selected_stock=selected_stock):
         try:
@@ -85,8 +81,46 @@ if st.button("Load Data and Analyze"):
         box_color = color_suggestion(suggestion)
 
         # Display the suggestion in a colored box
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
         st.markdown(f'<div style="background-color: {box_color}; padding: 10px"><b>{suggestion}</b></div>', unsafe_allow_html=True)
 
+        
+        
+        stock_api_key = 'IDKN0O488FIDEPVR'
+
+    # Function to check if the market is currently open
+    def is_market_open():
+        now = datetime.now().time()
+        market_open_time = time(9, 30)
+        market_close_time = time(16, 0)
+        return market_open_time <= now <= market_close_time
+
+    # Function to get real-time stock data
+    def get_real_time_stock_data(api_key, symbol):
+        if is_market_open():
+            try:
+                stock_url = f'https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={symbol}&interval=5min&apikey={api_key}'
+                response = requests.get(stock_url)
+                stock_data = response.json()
+                return stock_data.get('Time Series (5min)', {})
+            except Exception as e:
+                return None
+        else:
+            return None
+
+    # Display real-time stock data or a warning if the market is closed
+    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+    st.subheader('Real-Time Stock Data')
+
+
+    real_time_stock_data = get_real_time_stock_data(stock_api_key, selected_stock)
+
+    if real_time_stock_data:
+        latest_data = real_time_stock_data[list(real_time_stock_data.keys())[0]]
+        st.write(f"Real-Time Price ({selected_stock}): ${latest_data['4. close']}")
+    else:
+        st.warning("The market is closed and real-time stock data is not available. Try again when the market reopens")
+        
         # Plot raw data, RSI, moving averages, and MACD
         def plot_raw_data():
             fig = go.Figure()
@@ -135,49 +169,35 @@ if st.button("Load Data and Analyze"):
         fig1 = plot_plotly(m, forecast)
         st.plotly_chart(fig1)
 
-        st.subheader("Weekly Component")
 
-        # Extract and plot the 'weekly' component
-        weekly = forecast['weekly'].values
+    # Add a new section for news
+    st.subheader('Top News')
 
-        fig_weekly = go.Figure()
-        fig_weekly.add_trace(go.Scatter(x=forecast['ds'], y=weekly, name="weekly"))
-        fig_weekly.layout.update(title_text='Weekly Component')
-        st.plotly_chart(fig_weekly)
+    # Define a function to fetch top news stories
+    def get_top_news(selected_stock):
+        api_key = '60d16a8cc922453896de9495f9b99b1d'  # Get your News API key
+        news_url = f'https://newsapi.org/v2/everything?q={selected_stock}&apiKey={api_key}'
 
-# Add a new section for news
-st.subheader('Top News')
+        try:
+            response = requests.get(news_url)
+            news_data = response.json()
 
-# Define a function to fetch top news stories
-def get_top_news(selected_stock):
-    api_key = '60d16a8cc922453896de9495f9b99b1d'  # Get your News API key
-    news_url = f'https://newsapi.org/v2/everything?q={selected_stock}&apiKey={api_key}'
+            if news_data.get('status') == 'ok' and news_data.get('totalResults') > 0:
+                articles = news_data['articles']
 
-    try:
-        response = requests.get(news_url)
-        news_data = response.json()
+                # Display the top news stories
+                for article in articles[:5]:  # Display the top 5 news stories
+                    st.markdown(f"**Title:** {article['title']}")
+                    st.write(f"**Description:** {article['description']}")
+                    st.markdown(f"**Source:** {article['source']['name']}")
+                    st.write(f"**Published At:** {article['publishedAt']}")
+                    st.write(f"**URL:** {article['url']}")
+                    st.write("---")
+            else:
+                st.warning("No news available for this stock.")
 
-        if news_data.get('status') == 'ok' and news_data.get('totalResults') > 0:
-            articles = news_data['articles']
+        except Exception as e:
+            st.error(f"An error occurred while fetching news: {e}")
 
-            # Display the top news stories
-            for article in articles[:5]:  # Display the top 5 news stories
-                st.markdown(f"**Title:** {article['title']}")
-                st.write(f"**Description:** {article['description']}")
-                st.markdown(f"**Source:** {article['source']['name']}")
-                st.write(f"**Published At:** {article['publishedAt']}")
-                st.write(f"**URL:** {article['url']}")
-                st.write("---")
-        else:
-            st.warning("No news available for this stock.")
-
-    except Exception as e:
-        st.error(f"An error occurred while fetching news: {e}")
-
-# Call the function to get top news
-get_top_news(selected_stock)
-
-
-
-
-
+    # Call the function to get top news
+    get_top_news(selected_stock)
