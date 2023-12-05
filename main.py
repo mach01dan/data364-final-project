@@ -100,16 +100,6 @@ def data_cleaning(data):
     # Remove rows where 'High' < 'Low'
     cleaned_data = cleaned_data[cleaned_data['High'] >= cleaned_data['Low']]
 
-    # Calculate IQR for each numerical column
-    iqr_values = cleaned_data.quantile(0.75) - cleaned_data.quantile(0.25)
-
-    # Define the lower and upper bounds for outliers
-    lower_bounds = cleaned_data.quantile(0.25) - 3 * iqr_values
-    upper_bounds = cleaned_data.quantile(0.75) + 3 * iqr_values
-
-    outlier_mask = ~((cleaned_data < lower_bounds) | (cleaned_data > upper_bounds)).any(axis=1)
-    cleaned_data = cleaned_data[outlier_mask]
-
     return cleaned_data
 
 
@@ -145,6 +135,7 @@ def load_stock_data(selected_stock):
         # Call data_cleaning function on the selected stock data
         cleaned_data = data_cleaning(selected_stock_data)
         return cleaned_data
+        # return selected_stock_data
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
