@@ -33,6 +33,7 @@ macd_sell_threshold = 0  # Lower MACD values relative to the signal line suggest
 
 
 ##### FUNCTIONS SECTION BEGINS #####
+
 def download_stock_data():
     offset = 0
     limit = 3000
@@ -48,6 +49,8 @@ def download_stock_data():
     limit = limit if limit else len(symbols)
     end = min(offset + limit, len(symbols))
     is_valid = [False] * len(symbols)
+    st.info("Downloading stock data for the first time. This may take a few minutes.")
+
     # force silencing of verbose API
     with open(os.devnull, 'w') as devnull:
         with contextlib.redirect_stdout(devnull):
@@ -62,10 +65,59 @@ def download_stock_data():
 
     print('Total number of valid symbols downloaded = {}'.format(sum(is_valid)))
 
+
+def data_cleaning(data):
+    st.info("Cleaning Data. This should only take a few seconds.")
+
+    # Make a duplicate of the data
+    cleaned_data = data
+    
+    # Remove rows with missing values
+    cleaned_data = cleaned_data.dropna()
+    
+    # Remove rows with negative values for stock prices and volume
+    cleaned_data = data[(cleaned_data[['Open', 'High', 'Low', 'Close', 'Adj Close']] > 0).all(axis=1)]
+    cleaned_data = data[cleaned_data['Volume'] > 0]
+    
+    # Remove duplicate rows
+    cleaned_data = cleaned_data.drop_duplicates()
+   
+    # Remove rows where the 'Open' price is greater than the 'High' price
+    cleaned_data = cleaned_data[cleaned_data['Open'] <= cleaned_data['High']]
+
+    # Remove rows where the 'Open' price is less than the 'Low' price
+    cleaned_data = cleaned_data[cleaned_data['Open'] >= cleaned_data['Low']]
+
+    # Remove rows where the 'Close' price is greater than the 'High' price
+    cleaned_data = cleaned_data[cleaned_data['Close'] <= cleaned_data['High']]
+
+    # Remove rows where the 'Close' price is less than the 'Low' price
+    cleaned_data = cleaned_data[cleaned_data['Close'] >= cleaned_data['Low']]
+
+    # Remove rows where 'Low' > 'High'
+    cleaned_data = cleaned_data[cleaned_data['Low'] <= cleaned_data['High']]
+
+    # Remove rows where 'High' < 'Low'
+    cleaned_data = cleaned_data[cleaned_data['High'] >= cleaned_data['Low']]
+
+    # Calculate IQR for each numerical column
+    iqr_values = cleaned_data.quantile(0.75) - cleaned_data.quantile(0.25)
+
+    # Define the lower and upper bounds for outliers
+    lower_bounds = cleaned_data.quantile(0.25) - 3 * iqr_values
+    upper_bounds = cleaned_data.quantile(0.75) + 3 * iqr_values
+
+    outlier_mask = ~((cleaned_data < lower_bounds) | (cleaned_data > upper_bounds)).any(axis=1)
+    cleaned_data = cleaned_data[outlier_mask]
+
+    return cleaned_data
+
+
 def load_stock_data(selected_stock):
+    st.info("Loading Data. This should only take a few seconds.")
+
     if not os.path.exists(stocks_dir):
         # Download stock data if the stocks directory does not exist
-        st.info("Downloading stock data for the first time. This may take a few minutes.")
         download_stock_data()
 
     for filename in os.listdir(stocks_dir):
@@ -90,7 +142,10 @@ def load_stock_data(selected_stock):
     try:
         # Use the downloaded S&P 500 data
         selected_stock_data = data.loc[selected_stock]
-        return selected_stock_data
+        # Call data_cleaning function on the selected stock data
+        cleaned_data = data_cleaning(selected_stock_data)
+        return cleaned_data
+
     except Exception as e:
         st.error(f"An error occurred: {e}")
         return None
@@ -103,6 +158,7 @@ def color_suggestion(suggestion):
         return "red"
     else:
         return "gray"
+
 
 # Function to get real-time stock data
 def realtime_stock_data(api_key, symbol):
@@ -140,7 +196,9 @@ def get_top_news(selected_stock):
     except Exception as e:
         st.error(f"An error occurred while fetching news: {e}")
 
+
 def plot_raw_data():
+
     fig = go.Figure()
 
     # Use the index for the x-axis
@@ -202,9 +260,6 @@ def main():
 
     # Use a text input for the stock ticker symbol
     selected_stock = st.text_input('Enter stock ticker symbol for prediction', 'AAPL')
-
-    n_years = st.slider('Years of prediction:', 1, 5)
-    period = n_years * 365
 
     # button to trigger data loading and analysis
     if st.button("Load Data and Analyze"):
