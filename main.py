@@ -173,7 +173,7 @@ def realtime_stock_data(api_key, symbol):
 
 # Define a function to fetch top news stories
 def get_top_news(selected_stock):
-    news_url = f'https://newsapi.org/v2/everything?q={selected_stock}&apiKey={news_api_key}'
+    news_url = f'https://newsapi.org/v2/everything?q={selected_stock}&language=en&apiKey={news_api_key}'
 
     try:
         response = requests.get(news_url)
@@ -191,7 +191,7 @@ def get_top_news(selected_stock):
                 st.write(f"**URL:** {article['url']}")
                 st.write("---")
         else:
-            st.warning("The market is currently close. Try again later")
+            st.warning("The market is currently closed. Try again later")
 
     except Exception as e:
         st.error(f"An error occurred while fetching news: {e}")
